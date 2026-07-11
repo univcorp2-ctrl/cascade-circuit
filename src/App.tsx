@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { beginCheckout, fetchEntitlement, verifyCheckout } from './api';
+import { beginCheckout, fetchEntitlement, openBillingPortal, verifyCheckout } from './api';
 import { COLS, createGame, dropInColumn, type GameState } from './game/engine';
 import { consumeFreePlay, readBestScore, remainingFreePlays, saveBestScore } from './game/storage';
 import './styles.css';
@@ -80,6 +80,15 @@ export default function App() {
     }
   }
 
+  async function manageSubscription() {
+    setNotice('');
+    try {
+      await openBillingPortal();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : '契約管理画面を開けませんでした');
+    }
+  }
+
   async function shareScore() {
     const text = `Cascade Circuitで ${game.score.toLocaleString()}点・最大Lv.${game.maxTile}！ #CascadeCircuit`;
     try {
@@ -100,7 +109,9 @@ export default function App() {
         </a>
         <div className="header-actions">
           <span className={`plan-pill ${premium ? 'premium' : ''}`}>{premium ? 'PREMIUM' : `FREE ${remaining}/5`}</span>
-          {!premium && <button className="text-button" onClick={() => setShowPaywall(true)}>アップグレード</button>}
+          {premium
+            ? <button className="text-button" onClick={manageSubscription}>契約管理</button>
+            : <button className="text-button" onClick={() => setShowPaywall(true)}>アップグレード</button>}
         </div>
       </header>
 
