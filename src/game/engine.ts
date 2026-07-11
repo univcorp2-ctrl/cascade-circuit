@@ -95,6 +95,7 @@ export function findRecommendedColumn(state: GameState): number {
   const nextTile = peekNextTile(state.seed);
   let bestColumn = -1;
   let bestScore = Number.NEGATIVE_INFINITY;
+  const center = (state.board[0].length - 1) / 2;
 
   for (let column = 0; column < state.board[0].length; column += 1) {
     const landingRow = getLandingRow(state.board, column);
@@ -118,7 +119,14 @@ export function findRecommendedColumn(state: GameState): number {
       ) adjacency += 1;
     }
 
-    const score = simulated.state.lastGain * 100 + adjacency * 10 - column;
+    // Prefer an immediate merge first, then a visibly lower landing point and
+    // a position near the center. This makes the guided opening easy to follow.
+    const score =
+      simulated.state.lastGain * 1000 +
+      landingRow * 20 +
+      adjacency * 10 -
+      Math.abs(column - center);
+
     if (score > bestScore) {
       bestScore = score;
       bestColumn = column;
