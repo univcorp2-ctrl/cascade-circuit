@@ -27,16 +27,28 @@ export function createEmptyBoard(rows = ROWS, cols = COLS): Board {
 }
 
 export function createGame(seed = dailySeed()): GameState {
+  const safeSeed = seed >>> 0 || 1;
+  const board = createEmptyBoard();
+  const openingTile = peekNextTile(safeSeed);
+  const secondTile = openingTile === 1 ? 2 : 1;
+
+  // The opening board always contains an obvious pair. Dropping the NEXT tile
+  // into column 3 immediately demonstrates the core rule without reading text.
+  board[ROWS - 1][0] = openingTile;
+  board[ROWS - 1][1] = openingTile;
+  board[ROWS - 1][4] = secondTile;
+  board[ROWS - 1][5] = secondTile;
+
   return {
-    board: createEmptyBoard(),
+    board,
     score: 0,
     movesLeft: STARTING_MOVES,
     combo: 0,
-    maxTile: 1,
-    seed: seed >>> 0 || 1,
+    maxTile: Math.max(openingTile, secondTile),
+    seed: safeSeed,
     gameOver: false,
     lastGain: 0,
-    lastMessage: '光っている列を選び、次のコアを落とそう',
+    lastMessage: '点滅している列をタップすると、同じ色が3つそろいます',
   };
 }
 
@@ -71,15 +83,60 @@ function generatedTile(seed: number): [number, number] {
   return [nextSeed, peekNextTile(seed)];
 }
 
+export function getLandingRow(board: Board, column: number): number {
+  if (column < 0 || column >= board[0].length) return -1;
+  for (let row = board.length - 1; row >= 0; row -= 1) {
+    if (board[row][column] === null) return row;
+  }
+  return -1;
+}
+
+export function findRecommendedColumn(state: GameState): number {
+  const nextTile = peekNextTile(state.seed);
+  let bestColumn = -1;
+  let bestScore = Number.NEGATIVE_INFINITY;
+
+  for (let column = 0; column < state.board[0].length; column += 1) {
+    const landingRow = getLandingRow(state.board, column);
+    if (landingRow < 0) continue;
+
+    const simulated = dropInColumn(state, column, nextTile);
+    if (!simulated.accepted) continue;
+
+    let adjacency = 0;
+    const neighbors = [
+      [landingRow - 1, column],
+      [landingRow + 1, column],
+      [landingRow, column - 1],
+      [landingRow, column + 1],
+    ];
+    for (const [row, col] of neighbors) {
+      if (
+        row >= 0 && row < state.board.length &&
+        col >= 0 && col < state.board[0].length &&
+        state.board[row][col] === nextTile
+      ) adjacency += 1;
+    }
+
+    const score = simulated.state.lastGain * 100 + adjacency * 10 - column;
+    if (score > bestScore) {
+      bestScore = score;
+      bestColumn = column;
+    }
+  }
+
+  return bestColumn;
+}
+
 export function dropInColumn(current: GameState, column: number, forcedValue?: number): DropResult {
   if (current.gameOver || column < 0 || column >= current.board[0].length) {
     return { state: current, accepted: false };
   }
 
-  const landingRow = findLandingRow(current.board, column);
+  const landingRow = getLandingRow(current.board, column);
   if (landingRow < 0) {
     return {
-      state: { ...current, lastMessage: 'その列は満杯です。別の列を選ぼう' },
+      state: { ...current, lastMessage: 'その列は満杯です。別の列をタップしてください' },
       accepted: false,
     };
   }
@@ -93,10 +150,10 @@ export function dropInColumn(current: GameState, column: number, forcedValue?: n
   const noSpace = resolved.board[0].every((cell) => cell !== null);
   const gameOver = movesLeft <= 0 || noSpace;
   const message = resolved.chains > 0
-    ? `${resolved.chains}連鎖！ 同じ色を3個つなぐと進化します`
+    ? `合体成功！ ${resolved.chains > 1 ? `${resolved.chains}連鎖です` : '3つが1つに進化しました'}`
     : gameOver
       ? 'ラウンド終了'
-      : '同じ色を上下左右に3個以上つなげよう';
+      : '次も、同じ色の近くへ落として3つにしよう';
 
   return {
     accepted: true,
@@ -144,13 +201,6 @@ export function resolveCascades(input: Board): {
   }
 
   return { board, scoreGain, chains, maxTile };
-}
-
-function findLandingRow(board: Board, column: number): number {
-  for (let row = board.length - 1; row >= 0; row -= 1) {
-    if (board[row][column] === null) return row;
-  }
-  return -1;
 }
 
 function findMergeGroups(board: Board): Array<Array<{ row: number; col: number }>> {
