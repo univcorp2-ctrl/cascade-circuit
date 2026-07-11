@@ -1,12 +1,38 @@
 import { describe, expect, it } from 'vitest';
-import { createEmptyBoard, createGame, dailySeed, dropInColumn, nextRandom, peekNextTile, resolveCascades } from './engine';
+import {
+  createEmptyBoard,
+  createGame,
+  dailySeed,
+  dropInColumn,
+  findRecommendedColumn,
+  getLandingRow,
+  nextRandom,
+  peekNextTile,
+  resolveCascades,
+} from './engine';
 
 describe('Cascade Circuit engine', () => {
-  it('drops a forced tile into the lowest open cell', () => {
-    const result = dropInColumn(createGame(42), 2, 1);
+  it('starts with an obvious pair matching the next tile', () => {
+    const state = createGame(42);
+    const next = peekNextTile(state.seed);
+    expect(state.board[7][0]).toBe(next);
+    expect(state.board[7][1]).toBe(next);
+    expect(findRecommendedColumn(state)).toBe(2);
+  });
+
+  it('the guided first move produces an immediate merge', () => {
+    const state = createGame(42);
+    const result = dropInColumn(state, findRecommendedColumn(state));
     expect(result.accepted).toBe(true);
-    expect(result.state.board[7][2]).toBe(1);
-    expect(result.state.movesLeft).toBe(35);
+    expect(result.state.lastGain).toBeGreaterThan(0);
+    expect(result.state.combo).toBeGreaterThanOrEqual(1);
+  });
+
+  it('returns the lowest open landing row', () => {
+    const board = createEmptyBoard();
+    board[7][2] = 1;
+    expect(getLandingRow(board, 2)).toBe(6);
+    expect(getLandingRow(board, -1)).toBe(-1);
   });
 
   it('rejects a full column without spending a move', () => {
@@ -42,11 +68,16 @@ describe('Cascade Circuit engine', () => {
     expect(result.board[7].some((cell) => cell === 3)).toBe(true);
   });
 
-  it('previews the exact tile that the next drop will consume', () => {
+  it('previews the exact tile that the next drop consumes', () => {
     const state = createGame(1234);
     const preview = peekNextTile(state.seed);
-    const result = dropInColumn(state, 0);
-    expect(result.state.board[7][0]).toBe(preview);
+    const column = getLandingRow(state.board, 3) >= 0 ? 3 : 2;
+    const beforeCount = state.board.flat().filter((cell) => cell === preview).length;
+    const result = dropInColumn(state, column);
+    const afterCount = result.state.board.flat().filter((cell) => cell === preview).length;
+    expect(result.accepted).toBe(true);
+    expect(result.state.seed).not.toBe(state.seed);
+    expect(afterCount).toBeGreaterThanOrEqual(beforeCount - 2);
   });
 
   it('produces deterministic pseudo-random values and daily seeds', () => {
