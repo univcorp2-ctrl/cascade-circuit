@@ -9,6 +9,6 @@ export function readBestScore(): number { return Number(localStorage.getItem(BES
 export function saveBestScore(score: number): number { const best = Math.max(readBestScore(), score); localStorage.setItem(BEST_KEY, String(best)); return best; }
 function readUsage(): DailyUsage {
   const today = localDateKey();
-  try { const parsed = JSON.parse(localStorage.getItem(PLAY_KEY) ?? 'null') as DailyUsage | null; if (parsed?.date === today && Number.isFinite(parsed.used)) return parsed; } catch { /* reset */ }
+  try { const parsed = JSON.parse(localStorage.getItem(PLAY_KEY) ?? 'null') as DailyUsage | null; if (parsed?.date === today && Number.isFinite(parsed.used)) return parsed; } catch { /* reset corrupt state */ }
   return { date: today, used: 0 };
 }
